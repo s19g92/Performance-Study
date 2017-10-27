@@ -42,9 +42,6 @@ class suzuki {
 	static int hello_count = 0;
 	static boolean recvd_compute = false;
 	static boolean reg_complete = false;
-	static int[] Sent;
-	static int[] Recvd;
-	static int[] Channel_state;
 	static Socket socket;
 	static List<String> my_nebr = new ArrayList<String>();
 	static Map<String, String> my_nebr_hostnames = new HashMap<String, String>();
@@ -99,9 +96,6 @@ class suzuki {
 						if (is_coord) {
 							if (id.equalsIgnoreCase("1")) {
 								my_nebr = neighbour;
-								Sent = new int[my_nebr.size()];
-								Recvd = new int[my_nebr.size()];
-								Channel_state = new int[my_nebr.size()];
 							}
 						}
 					}
@@ -271,7 +265,7 @@ class suzuki {
 				clock = Math.max(Integer.valueOf(message.split(" ")[1]), clock + 1);
 				for (int i = 0; i < my_nebr.size(); i++) {
 					if (message.split(" ")[0].equalsIgnoreCase(my_nebr.get(i))) {
-						Recvd[i]++;
+						
 					}
 				}
 				compute();
@@ -335,9 +329,6 @@ class suzuki {
 									msg_list.length);
 							List<String> neighbour = Arrays.asList(nebr);
 							my_nebr = neighbour;
-							Sent = new int[my_nebr.size()];
-							Recvd = new int[my_nebr.size()];
-							Channel_state = new int[my_nebr.size()];
 							System.out.print(my_nebr);
 							System.out.println("");
 						}
@@ -524,9 +515,6 @@ class suzuki {
 		public static void start_compute() {
 
 			if (ready_process == no_process) {
-				for (int x = 0; x < my_nebr.size(); x++) {
-					Sent[x]++;
-				}
 				Iterator it = id_hostnames.entrySet().iterator();
 				while (it.hasNext()) {
 					Map.Entry pair = (Map.Entry) it.next();
