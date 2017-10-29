@@ -33,6 +33,7 @@ class raymond {
 	static int avg_msg_count = 0;
 	static long avg_wait_time = 0;
 	static long avg_delay = 0;
+	static int complete;
 	static Map<String, String> id_hostnames = new HashMap<String, String>();
 
 	// Individual Process Variables.
@@ -251,7 +252,7 @@ class raymond {
 			int number = Integer.valueOf(list[2]);
 			int q = Integer.valueOf(list[1]);
 			RN[q] = Math.max(RN[q], number);
-			
+
 			if (has_token && !in_cs) {
 				if (RN[q] == LN[q] + 1 && queue.isEmpty()) {
 					long time = System.currentTimeMillis() % 1000;
@@ -265,7 +266,7 @@ class raymond {
 
 		// On receiving token
 		else if (message.split(" ")[0].equalsIgnoreCase("request")) {
-			
+
 			has_token = true;
 			String[] list = message.split(" ");
 			wait_time = request_time - Long.parseLong(list[1]);
@@ -279,11 +280,62 @@ class raymond {
 				for (int i = no_process + 2; i < list.length; i++) {
 					queue.add(list[i]);
 				}
-		
-			if(req_sent) {
+
+			if (req_sent) {
 				req_sent = false;
 				start_cs();
 			}
+		}
+
+		// On receiving data from other process.
+		else if (message.split(" ")[0].equalsIgnoreCase("data")) {
+			String[] list = message.split(" ");
+			if (avg_msg_count == 0) {
+				avg_msg_count = Integer.valueOf(list[1]);
+			} else {
+				avg_msg_count = (avg_msg_count + Integer.valueOf(list[1])) / 2;
+			}
+
+			if (avg_delay == 0) {
+				avg_delay = Long.parseLong(list[2]);
+			} else {
+				avg_delay = (avg_delay + Long.parseLong(list[2])) / 2;
+			}
+
+			if (avg_wait_time == 0) {
+				avg_wait_time = Integer.valueOf(list[1]);
+			} else {
+				avg_wait_time = (avg_wait_time + Long.parseLong(list[2])) / 2;
+			}
+		}
+
+		// On receiving completed from process.
+		else if (message.equalsIgnoreCase("completed")) {
+			complete++;
+			if (complete == no_process) {
+				Iterator it = id_hostnames.entrySet().iterator();
+				while (it.hasNext()) {
+					Map.Entry pair = (Map.Entry) it.next();
+					String id_proc = (String) pair.getKey();
+					String host = (String) pair.getValue();
+					String msg = "TERMINATE";
+					if (!id_proc.equalsIgnoreCase("0")) {
+						send_msg(host, 25555, msg);
+						System.out.println("SENT " + msg + " to " + host);
+					}
+
+				}
+				System.out.println("AVG MSG COUNT" + avg_msg_count);
+				System.out.println("AVG DELAY" + avg_delay);
+				System.out.println("AVG WAIT TIME" + avg_wait_time);
+				System.exit(0);
+			}
+			
+		}
+
+		// On receiving terminate.
+		else if (message.equalsIgnoreCase("terminate")) {
+			System.exit(0);
 		}
 	}
 
@@ -534,8 +586,7 @@ class raymond {
 					}
 				}
 				System.out.println(msg);
-			}
-			else {
+			} else {
 				RN[Integer.valueOf(id)]++;
 				start_cs();
 			}
@@ -546,41 +597,63 @@ class raymond {
 	}
 
 	public static void start_cs() throws InterruptedException {
-		
+
 		in_cs = true;
-		String data_msg = "DATA " + msg_count + " " + delay + " " + wait_time;
-		send_msg(id_hostnames.get("0"), 25555, data_msg);
+		if (!is_coord) {
+			String data_msg = "DATA " + msg_count + " " + delay + " "
+					+ wait_time;
+			send_msg(id_hostnames.get("0"), 25555, data_msg);
+		}
+		else {
+			if (avg_msg_count == 0) {
+				avg_msg_count = msg_count;
+			} else {
+				avg_msg_count = (avg_msg_count + msg_count) / 2;
+			}
+
+			if (avg_delay == 0) {
+				avg_delay = delay;
+			} else {
+				avg_delay = (avg_delay + delay) / 2;
+			}
+
+			if (avg_wait_time == 0) {
+				avg_wait_time = wait_time;
+			} else {
+				avg_wait_time = (avg_wait_time + wait_time) / 2;
+			}
+		}
 		// Reset data
 		msg_count = 0;
 		delay = 0;
 		wait_time = 0;
-		
+
 		System.out.println("ENTERING CS !!");
 		Thread.sleep(t3);
 		System.out.println("EXITING CS !!");
-		
+
 		// After waking up, increase own counter and add to queue.
 		int p = Integer.valueOf(id);
 		LN[p] = RN[p];
-		for(int i=0; i<no_process; i++) {
+		for (int i = 0; i < no_process; i++) {
 			boolean in_queue = false;
-			
+
 			Iterator it = my_nebr_hostnames.entrySet().iterator();
 			while (it.hasNext()) {
 				Map.Entry pair = (Map.Entry) it.next();
 				String id_proc = (String) pair.getKey();
-				if(id_proc.equalsIgnoreCase(""+i)){
+				if (id_proc.equalsIgnoreCase("" + i)) {
 					in_queue = true;
 					break;
 				}
 			}
-			if(!in_queue && RN[i] == LN[i]+1){				
-				queue.add(""+i);
+			if (!in_queue && RN[i] == LN[i] + 1) {
+				queue.add("" + i);
 			}
 		}
-		
-		//If queue is not empty. Send the token.
-		if(!queue.isEmpty()){
+
+		// If queue is not empty. Send the token.
+		if (!queue.isEmpty()) {
 			String i = queue.get(0);
 			queue.remove(0);
 			long time = System.currentTimeMillis() % 1000;
@@ -590,5 +663,34 @@ class raymond {
 			System.out.println("SENT : " + msg);
 		}
 		in_cs = false;
+
+		run_count--;
+		if (run_count > 0) {
+			compute();
+		} else {
+			if (!id.equalsIgnoreCase("0"))
+				send_msg(id_hostnames.get("0"), 25555, "completed");
+			else {
+				complete++;
+				if (complete == no_process) {
+					Iterator it = id_hostnames.entrySet().iterator();
+					while (it.hasNext()) {
+						Map.Entry pair = (Map.Entry) it.next();
+						String id_proc = (String) pair.getKey();
+						String host = (String) pair.getValue();
+						String msg = "TERMINATE";
+						if (!id_proc.equalsIgnoreCase("0")) {
+							send_msg(host, 25555, msg);
+							System.out.println("SENT " + msg + " to " + host);
+						}
+					}
+					System.out.println("AVG MSG COUNT" + avg_msg_count);
+					System.out.println("AVG DELAY" + avg_delay);
+					System.out.println("AVG WAIT TIME" + avg_wait_time);
+					System.exit(0);
+				}
+				
+			}
+		}
 	}
 }
