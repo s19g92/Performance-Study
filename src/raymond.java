@@ -650,7 +650,9 @@ class raymond {
 			send_msg(my_nebr_hostnames.get("0"), 25555, data_msg);
 			
 		} else {
-			
+			String data_msg = "DATA " + msg_count + " " + delay + " "
+					+ wait_time;
+			System.out.println("ADDED : " + data_msg + " to average");
 			avg_msg_count = (avg_msg_count * cs_counter + msg_count)
 					/ (cs_counter + 1);
 			avg_delay = (avg_delay * cs_counter + delay) / (cs_counter + 1);

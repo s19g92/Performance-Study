@@ -6,12 +6,17 @@ import java.io.*;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.Date;
+import java.sql.Timestamp;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.Scanner;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -24,41 +29,61 @@ class suzuki {
 	static int t1;
 	static int t2;
 	static int t3;
-	static int[] token;
 	static int no_process;
 	static boolean is_coord = false;
+	static final SimpleDateFormat sdf = new SimpleDateFormat("HH.mm.ss");
 
 	// Coordinator only data.
 	static int active_process = 0;
 	static int ready_process = 0;
+	static long avg_msg_count = 0;
+	static long avg_wait_time = 0;
+	static long avg_delay = 0;
+	static int cs_counter = 0;
+	static int complete;
+	static Map<String, String> parent = new HashMap<String, String>();
 	static Map<String, String> id_hostnames = new HashMap<String, String>();
 
 	// Individual Process Variables.
 	static String id = "";
-	static int cs_counter = 0;
+	static int run_count = 0;
 	static boolean has_token = false;
 	static boolean in_cs = false;
-	static String holder = "";
 	static boolean reg_complete = false;
+	static boolean req_sent = false;
 	static Socket socket;
+	static String holder = "";
+	static List<String> queue = new ArrayList<String>();
 	static Map<String, String> my_nebr_hostnames = new HashMap<String, String>();
+
+	// Data Variables.
+	static int msg_count = 0;
+	static long wait_time;
+	static long delay;
+	static Timestamp request_time;
 
 	/****************************** MAIN FUNCTION *********************************************/
 
 	public static void main(String[] args) throws Exception {
 
-		if (args.length != 0)
+		if (args.length != 0) {
 			if (args[0].equalsIgnoreCase("-c")) {
 				is_coord = true;
 				id = "0";
 				active_process++;
 			}
+		}
+
+		Random r = new Random();
+		int Low = 2;
+		int High = 5;
+		run_count = r.nextInt(High - Low) + Low;
 
 		// Read the dsConfig File and assign the data to proper variables.
 		Scanner sc2 = null;
 		String[] list = null;
 		try {
-			sc2 = new Scanner(new File("SdsConfig"));
+			sc2 = new Scanner(new File("RdsConfig"));
 		} catch (FileNotFoundException e) {
 			e.printStackTrace();
 		}
@@ -74,15 +99,14 @@ class suzuki {
 					}
 				} else if (list[0].equalsIgnoreCase("number")) {
 					no_process = Integer.valueOf(list[3]);
-					token = new int[no_process];
 				} else if (list[0].equalsIgnoreCase("t1")) {
 					t1 = Integer.valueOf(list[1]);
 				} else if (list[0].equalsIgnoreCase("t2")) {
 					t2 = Integer.valueOf(list[1]);
+				} else if (list[0].equalsIgnoreCase("t3")) {
+					t3 = Integer.valueOf(list[1]);
 				} else {
-					if (list[0].equalsIgnoreCase("t3")) {
-						t3 = Integer.valueOf(list[1]);
-					}
+					parent.put(list[0], list[1]);
 				}
 			}
 		}
@@ -90,6 +114,8 @@ class suzuki {
 		System.out.println("Is coordinator : " + is_coord);
 		System.out.println("No. of process :" + no_process);
 		System.out.println("Token:" + has_token);
+		System.out.println("HOLDER:" + holder);
+		System.out.println("RUN TIMES : " + run_count);
 		System.out.println("");
 
 		// If the node is the coordinator then start listener.
@@ -126,7 +152,7 @@ class suzuki {
 			BufferedWriter bw = new BufferedWriter(osw);
 
 			bw.write(sendMessage + "!");
-			// bw.flush();
+			bw.flush();
 
 		} catch (Exception exception) {
 			exception.printStackTrace();
@@ -188,6 +214,14 @@ class suzuki {
 								msg_type(msg);
 							} catch (IOException e) {
 								e.printStackTrace();
+							} catch (InterruptedException e) {
+								e.printStackTrace();
+							} catch (NumberFormatException e) {
+								// TODO Auto-generated catch block
+								e.printStackTrace();
+							} catch (ParseException e) {
+								// TODO Auto-generated catch block
+								e.printStackTrace();
 							}
 						}
 					};
@@ -207,7 +241,8 @@ class suzuki {
 	}
 
 	// Perform some action depending on the type of the message received.
-	public static void msg_type(String message) throws IOException {
+	public static void msg_type(String message) throws IOException,
+			InterruptedException, NumberFormatException, ParseException {
 		// On Receiving a hostnames from store in map.
 		if (message.split(" ")[0].equalsIgnoreCase("hostnames")) {
 			String[] list = message.split(" ");
@@ -223,16 +258,110 @@ class suzuki {
 			System.out.println("");
 		}
 
+		// On receiving request message.
+		else if (message.split(" ")[0].equalsIgnoreCase("request")) {
+			String[] list = message.split(" ");
+			int q = Integer.valueOf(list[1]);
+			queue.add(list[1]);
+			if (has_token && !in_cs) {
+				if (queue.get(0).equalsIgnoreCase(list[1])) {
+					Timestamp time = new Timestamp(System.currentTimeMillis());
+					String msg = "Token " + sdf.format(time);
+					holder = list[1];
+					System.out.println("SENT : " + msg + " to "
+							+ my_nebr_hostnames.get(holder));
+					send_msg(my_nebr_hostnames.get(holder), 25555, msg);
+					queue.clear();
+					has_token = false;
+
+				}
+			} else if (!has_token && !req_sent) {
+				String msg = "";
+				request_time = new Timestamp(System.currentTimeMillis());
+				msg = "Request " + id;
+				msg_count++;
+				send_msg(my_nebr_hostnames.get(holder), 25555, msg);
+				req_sent = true;
+			}
+		}
+
+		// On receiving token
+		else if (message.split(" ")[0].equalsIgnoreCase("token")) {
+
+			has_token = true;
+			String[] list = message.split(" ");
+			System.out.print("QUEUE : " + queue);
+			System.out.println("");
+
+			if (!queue.isEmpty()) {
+				if (req_sent && queue.get(0).equalsIgnoreCase(id)) {
+					req_sent = false;
+					queue.remove(0);
+					SimpleDateFormat format = new SimpleDateFormat("HH.mm.ss");
+					Date date1 = (Date) format.parse("" + sdf.format(request_time));
+					Date date2 = (Date) format.parse(list[1]);
+					Date date3 = (Date) format.parse(""
+							+ sdf.format(new Timestamp(System.currentTimeMillis())));
+
+					long difference = date2.getTime() - date1.getTime();
+					wait_time = date3.getTime() - date1.getTime();
+					delay = date3.getTime() - date2.getTime();
+					start_cs();
+				} else {
+					req_sent = false;
+					holder = queue.get(0);
+					queue.remove(0);
+					send_msg(my_nebr_hostnames.get(holder), 25555, message);
+				}
+			}
+
+		}
+
+		// On receiving data from other process.
+		else if (message.split(" ")[0].equalsIgnoreCase("data")) {
+			String[] list = message.split(" ");
+
+			avg_msg_count = (avg_msg_count * cs_counter + Integer
+					.valueOf(list[1])) / (cs_counter + 1);
+			avg_delay = (avg_delay * cs_counter + Long.parseLong(list[2]))
+					/ (cs_counter + 1);
+			avg_wait_time = (avg_wait_time * cs_counter + Long
+					.parseLong(list[2])) / (cs_counter + 1);
+			cs_counter++;
+		}
+
+		// On receiving completed from process.
+		else if (message.equalsIgnoreCase("completed")) {
+			complete++;
+			if (complete == no_process) {
+				Iterator it = id_hostnames.entrySet().iterator();
+				while (it.hasNext()) {
+					Map.Entry pair = (Map.Entry) it.next();
+					String id_proc = (String) pair.getKey();
+					String host = (String) pair.getValue();
+					String msg = "TERMINATE";
+					if (!id_proc.equalsIgnoreCase("0")) {
+						System.out.println("SENT " + msg + " to " + host);
+						send_msg(host, 25555, msg);
+					}
+
+				}
+				System.out.println("AVG MSG COUNT : " + avg_msg_count);
+				System.out.println("AVG DELAY : " + avg_delay);
+				System.out.println("AVG WAIT TIME : " + avg_wait_time);
+				System.exit(0);
+			}
+
+		}
+
 		// On Receiving compute message.
-		else if (message.split(" ")[1].equalsIgnoreCase("compute")) {
+		else if (message.equalsIgnoreCase("compute")) {
 			compute();
 		}
-		
-		// On receiving request message.
-		else if (message.split(" ")[0].equalsIgnoreCase("request")){
-			if(has_token) {
-				
-			}
+
+		// On receiving terminate.
+		else if (message.equalsIgnoreCase("terminate")) {
+			System.exit(0);
 		}
 	}
 
@@ -254,9 +383,9 @@ class suzuki {
 				OutputStreamWriter osw = new OutputStreamWriter(os);
 				BufferedWriter bw = new BufferedWriter(osw);
 
+				System.out.println("Message " + msg + " sent to the : " + host);
 				bw.write(msg + "!");
 				bw.flush();
-				System.out.println("Message " + msg + " sent to the : " + host);
 
 				// Get the return message from the coordinator.
 				InputStream is = socket.getInputStream();
@@ -288,6 +417,7 @@ class suzuki {
 						// Check the id assigned and store the corresponding
 						// values.
 						id = msg_list[1];
+						holder = msg_list[2];
 						System.out.println("Id received : " + id);
 					}
 				}
@@ -356,6 +486,14 @@ class suzuki {
 									msg_type(msg);
 								} catch (IOException e) {
 									e.printStackTrace();
+								} catch (InterruptedException e) {
+									e.printStackTrace();
+								} catch (NumberFormatException e) {
+									// TODO Auto-generated catch block
+									e.printStackTrace();
+								} catch (ParseException e) {
+									// TODO Auto-generated catch block
+									e.printStackTrace();
 								}
 							}
 						};
@@ -374,7 +512,7 @@ class suzuki {
 							// Also store its hostname.
 							active_process++;
 							String id = Integer.toString(active_process - 1);
-							returnMessage = "ACK " + id;
+							returnMessage = "ACK " + id + " " + parent.get(id);
 
 							// Store the id and the hostname in the map.
 							id_hostnames.put(id, hostName);
@@ -383,10 +521,10 @@ class suzuki {
 							OutputStream os = socket.getOutputStream();
 							OutputStreamWriter osw = new OutputStreamWriter(os);
 							BufferedWriter bw = new BufferedWriter(osw);
-							bw.write(returnMessage + "!");
 							System.out.println("Message sent is : "
 									+ returnMessage);
-							// bw.flush();
+							bw.write(returnMessage + "!");
+							bw.flush();
 						}
 					}
 				}
@@ -395,7 +533,12 @@ class suzuki {
 					send_hostnames();
 					reg_complete = true;
 					start_compute();
-					compute();
+					Thread one = new Thread() {
+						public void run() {
+							compute();
+						}
+					};
+					one.start();
 				}
 			}
 		} catch (Exception e) {
@@ -438,22 +581,21 @@ class suzuki {
 		}
 	}
 
-		// Send the compute message after receiving all ready messages.
+	// Send the compute message after receiving all ready messages.
 	public static void start_compute() {
 
-		if (ready_process == no_process) {
-			Iterator it = id_hostnames.entrySet().iterator();
-			while (it.hasNext()) {
-				Map.Entry pair = (Map.Entry) it.next();
-				String id_proc = (String) pair.getKey();
-				String host = (String) pair.getValue();
-				String msg = id + " COMPUTE";
-				if (!id_proc.equalsIgnoreCase("0")) {
-					send_msg(host, 25555, msg);
-					System.out.println("SENT " + msg + " to " + host);
-				}
+		Iterator it = id_hostnames.entrySet().iterator();
+		while (it.hasNext()) {
+			Map.Entry pair = (Map.Entry) it.next();
+			String id_proc = (String) pair.getKey();
+			String host = (String) pair.getValue();
+			String msg = "COMPUTE";
+			if (!id_proc.equalsIgnoreCase("0")) {
+				System.out.println("SENT " + msg + " to " + host);
+				send_msg(host, 25555, msg);
 			}
 		}
+
 	}
 
 	// Simulates the computing process of a node on receiving a message.
@@ -463,23 +605,124 @@ class suzuki {
 			int randomNum = ThreadLocalRandom.current().nextInt(t1, t2 + 1);
 			Thread.sleep(randomNum);
 			
-			// After waking up request critical section
-			String msg = "";
-			Iterator it = my_nebr_hostnames.entrySet().iterator();
-			while (it.hasNext()) {
-				Map.Entry pair = (Map.Entry) it.next();
-				String id_proc = (String) pair.getKey();
-				String host = (String) pair.getValue();
-				long time_stamp = System.currentTimeMillis() % 1000;
-				msg = "Request " + id + " " + cs_counter + " " + time_stamp;
-				if (!id_proc.equalsIgnoreCase("0")) {
-					send_msg(host, 25555, msg);
+
+			// After waking up request critical section if it doesnt have token
+			if (!has_token && !req_sent) {
+				String msg = "";
+				request_time = new Timestamp(System.currentTimeMillis());
+				msg = "Request " + id;
+				msg_count++;
+				send_msg(my_nebr_hostnames.get(holder), 25555, msg);
+				req_sent = true;
+				queue.add(id);
+
+			} else if(has_token){
+				queue.add(id);
+				if (!queue.isEmpty() ) {
+					if (queue.get(0).equalsIgnoreCase(id)) {
+						queue.remove(0);
+						start_cs();
+					}
+				}else {
+					holder = queue.get(0);
+					queue.remove(0);
+					Timestamp time = new Timestamp(System.currentTimeMillis());
+					String msg = "Token " + sdf.format(time);
+					System.out.print("SENT : " + msg);
+					send_msg(my_nebr_hostnames.get(holder), 25555, msg);
+					has_token = false;
+					System.out.println("");
+					String re_msg = "";
+					request_time = new Timestamp(System.currentTimeMillis());
+					re_msg = "Request " + id;
+					msg_count++;
+					send_msg(my_nebr_hostnames.get(holder), 25555, re_msg);
+					req_sent = true;
 				}
 			}
-			System.out.println(msg);		
-		
+
 		} catch (InterruptedException e) {
 			e.printStackTrace();
+		}
+	}
+
+	public static void start_cs() throws InterruptedException {
+
+		in_cs = true;
+
+		System.out.println("ENTERING CS !!");
+		Thread.sleep(t3);
+		System.out.println("EXITING CS !!");
+
+		if (!is_coord) {
+			String data_msg = "DATA " + msg_count + " " + delay + " "
+					+ wait_time;
+			System.out.println("SENT : " + data_msg + " to coordinator");
+			send_msg(my_nebr_hostnames.get("0"), 25555, data_msg);
+
+		} else {
+			String data_msg = "DATA " + msg_count + " " + delay + " "
+					+ wait_time;
+			System.out.println("ADDED : " + data_msg + " to average");
+			avg_msg_count = (avg_msg_count * cs_counter + msg_count)
+					/ (cs_counter + 1);
+			avg_delay = (avg_delay * cs_counter + delay) / (cs_counter + 1);
+			avg_wait_time = (avg_wait_time * cs_counter + wait_time)
+					/ (cs_counter + 1);
+			cs_counter++;
+		}
+
+		// Reset data
+		msg_count = 0;
+		delay = 0;
+		wait_time = 0;
+
+		// After waking up, check queue and send token.
+		in_cs = false;
+
+		// If queue is not empty. Send the token.
+		if (!queue.isEmpty()) {
+			// Change the parent node.
+			holder = queue.get(0);
+
+			queue.remove(0);
+			Timestamp time = new Timestamp(System.currentTimeMillis());
+			String msg = "Token " + sdf.format(time);
+			System.out.print("SENT : " + msg);
+			send_msg(my_nebr_hostnames.get(holder), 25555, msg);
+			has_token = false;
+			System.out.println("");
+		}
+
+		run_count--;
+		System.out.println("RUN COUNT LEFT : " + run_count);
+		if (run_count > 0) {
+			compute();
+		} else {
+			if (!is_coord)
+				send_msg(my_nebr_hostnames.get("0"), 25555, "completed");
+			else {
+				complete++;
+				if (complete == no_process) {
+					Iterator it = id_hostnames.entrySet().iterator();
+					while (it.hasNext()) {
+						Map.Entry pair = (Map.Entry) it.next();
+						String id_proc = (String) pair.getKey();
+						String host = (String) pair.getValue();
+						String msg = "TERMINATE";
+						if (!id_proc.equalsIgnoreCase("0")) {
+
+							System.out.print("SENT " + msg + " to " + host);
+							System.out.println("");
+							send_msg(host, 25555, msg);
+						}
+					}
+					System.out.println("AVG MSG COUNT" + avg_msg_count);
+					System.out.println("AVG DELAY" + avg_delay);
+					System.out.println("AVG WAIT TIME" + avg_wait_time);
+					System.exit(0);
+				}
+			}
 		}
 	}
 }
