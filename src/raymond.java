@@ -298,9 +298,9 @@ class raymond {
 			Date date2 = (Date) format.parse(list[1]);
 			Date date3 = (Date) format.parse(""+sdf.format(new Timestamp(System.currentTimeMillis())));
 			
-			long difference = date2.getTime() - date1.getTime();
-			wait_time = date3.getTime() - date1.getTime();
-			delay = date3.getTime() - date2.getTime();
+			long difference = Math.abs(date2.getTime() - date1.getTime());
+			wait_time = Math.abs(date3.getTime() - date1.getTime());
+			delay = Math.abs(date3.getTime() - date2.getTime());
 
 			for (int i = 0; i < no_process; i++) {
 				LN[i] = Integer.valueOf(list[i + 3]);
@@ -323,12 +323,12 @@ class raymond {
 		else if (message.split(" ")[0].equalsIgnoreCase("data")) {
 			String[] list = message.split(" ");
 
-			avg_msg_count = (avg_msg_count * cs_counter + Integer
-					.valueOf(list[1])) / (cs_counter + 1);
-			avg_delay = (avg_delay * cs_counter + Long.parseLong(list[2]))
+			avg_msg_count = (avg_msg_count * cs_counter + Math.abs(Integer
+					.valueOf(list[1]))) / (cs_counter + 1);
+			avg_delay = (avg_delay * cs_counter + Math.abs(Long.parseLong(list[2])))
 					/ (cs_counter + 1);
-			avg_wait_time = (avg_wait_time * cs_counter + Long
-					.parseLong(list[2])) / (cs_counter + 1);
+			avg_wait_time = (avg_wait_time * cs_counter + Math.abs(Long
+					.parseLong(list[2]))) / (cs_counter + 1);
 			cs_counter++;
 		}
 
