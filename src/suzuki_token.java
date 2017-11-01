@@ -21,7 +21,7 @@ import java.util.Scanner;
 import java.util.concurrent.ThreadLocalRandom;
 
 @SuppressWarnings({ "rawtypes", "unused" })
-class raymond {
+class suzuki {
 
 	// Common Variables and Data Storage.
 	static String coordinator = "";
@@ -36,10 +36,10 @@ class raymond {
 	// Coordinator only data.
 	static int active_process = 0;
 	static int ready_process = 0;
-	static long avg_msg_count = 0;
-	static long avg_wait_time = 0;
-	static long avg_delay = 0;
-	static int cs_counter = 0;
+	static float avg_msg_count = 0;
+	static float avg_wait_time = 0;
+	static float avg_delay = 0;
+	static float cs_counter = 0;
 	static int complete;
 	static Map<String, String> id_hostnames = new HashMap<String, String>();
 
@@ -57,9 +57,9 @@ class raymond {
 	static Map<String, String> my_nebr_hostnames = new HashMap<String, String>();
 
 	// Data Variables.
-	static int msg_count = 0;
-	static long wait_time;
-	static long delay;
+	static float msg_count = 0;
+	static float wait_time;
+	static float delay;
 	static Timestamp request_time;
 
 	/****************************** MAIN FUNCTION *********************************************/
@@ -75,8 +75,8 @@ class raymond {
 		}
 		
 		Random r = new Random();
-		int Low = 2;
-		int High = 5;
+		int Low = 5;
+		int High = 10;
 		run_count = r.nextInt(High-Low) + Low;
 
 		// Read the dsConfig File and assign the data to proper variables.
@@ -279,10 +279,11 @@ class raymond {
 							msg = msg + " " + x;
 						}
 					}
+					has_token = false;
 					System.out.println("SENT : " + msg + " to " + my_nebr_hostnames.get(list[1]));
 					send_msg(my_nebr_hostnames.get(list[1]), 25555, msg);
 					queue.clear();
-					has_token = false;
+					
 					
 				}
 			}
@@ -291,14 +292,14 @@ class raymond {
 		// On receiving token
 		else if (message.split(" ")[0].equalsIgnoreCase("token")) {
 
-			has_token = true;
+			
 			String[] list = message.split(" ");
 			SimpleDateFormat format = new SimpleDateFormat("HH.mm.ss");
 			Date date1 = (Date) format.parse(""+sdf.format(request_time));
 			Date date2 = (Date) format.parse(list[1]);
 			Date date3 = (Date) format.parse(""+sdf.format(new Timestamp(System.currentTimeMillis())));
 			
-			long difference = Math.abs(date2.getTime() - date1.getTime());
+			float difference = Math.abs(date2.getTime() - date1.getTime());
 			wait_time = Math.abs(date3.getTime() - date1.getTime());
 			delay = Math.abs(date3.getTime() - date2.getTime());
 
@@ -312,6 +313,7 @@ class raymond {
 				}
 			System.out.print("QUEUE : "+ queue);
 			System.out.println("");
+			has_token = true;
 
 			if(req_sent) {
 				req_sent = false;
@@ -323,12 +325,10 @@ class raymond {
 		else if (message.split(" ")[0].equalsIgnoreCase("data")) {
 			String[] list = message.split(" ");
 
-			avg_msg_count = (avg_msg_count * cs_counter + Math.abs(Integer
-					.valueOf(list[1]))) / (cs_counter + 1);
-			avg_delay = (avg_delay * cs_counter + Math.abs(Long.parseLong(list[2])))
+			avg_msg_count = (avg_msg_count * cs_counter + Math.abs(Float.parseFloat(list[1]))) / (cs_counter + 1);
+			avg_delay = (avg_delay * cs_counter + Math.abs(Float.parseFloat(list[2])))
 					/ (cs_counter + 1);
-			avg_wait_time = (avg_wait_time * cs_counter + Math.abs(Long
-					.parseLong(list[2]))) / (cs_counter + 1);
+			avg_wait_time = (avg_wait_time * cs_counter + Math.abs(Float.parseFloat(list[2]))) / (cs_counter + 1);
 			cs_counter++;
 		}
 
@@ -611,7 +611,7 @@ class raymond {
 				String msg = "";
 				RN[Integer.valueOf(id)]++;
 				request_time = new Timestamp(System.currentTimeMillis());	
-				msg = "Request " + id + " " + RN[Integer.valueOf(id)];				
+				msg = "Request " + id + " " + RN[Integer.valueOf(id)]+" at time "+request_time;				
 				Iterator it = my_nebr_hostnames.entrySet().iterator();
 				System.out.println("SENT :" + msg );
 				while (it.hasNext()) {
@@ -686,7 +686,7 @@ class raymond {
 		System.out.print("QUEUE : "+ queue);
 		System.out.println("");
 
-		in_cs = false;
+		
 		// If queue is not empty. Send the token.
 		if (!queue.isEmpty()) {
 			String i = queue.get(0);
@@ -703,12 +703,13 @@ class raymond {
 				}
 			}
 			queue.clear();
+			has_token = false;
 			System.out.print("SENT : " + msg);
 			send_msg(my_nebr_hostnames.get(i), 25555, msg);
-			has_token = false;			
 			System.out.println("");
 		}
-
+		
+		in_cs = false;
 		run_count--;
 		System.out.println("RUN COUNT LEFT : " + run_count);
 		if (run_count > 0) {
