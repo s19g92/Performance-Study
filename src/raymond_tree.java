@@ -36,10 +36,10 @@ class raymond_tree {
 	// Coordinator only data.
 	static int active_process = 0;
 	static int ready_process = 0;
-	static long avg_msg_count = 0;
-	static long avg_wait_time = 0;
-	static long avg_delay = 0;
-	static int cs_counter = 0;
+	static float avg_msg_count = 0;
+	static float avg_wait_time = 0;
+	static float avg_delay = 0;
+	static float cs_counter = 0;
 	static int complete;
 	static Map<String, String> parent = new HashMap<String, String>();
 	static Map<String, String> id_hostnames = new HashMap<String, String>();
@@ -267,12 +267,12 @@ class raymond_tree {
 				if (queue.get(0).equalsIgnoreCase(list[1])) {
 					Timestamp time = new Timestamp(System.currentTimeMillis());
 					String msg = "Token " + sdf.format(time);
+					has_token = false;
 					holder = list[1];
 					System.out.println("SENT : " + msg + " to "
 							+ my_nebr_hostnames.get(holder));
 					send_msg(my_nebr_hostnames.get(holder), 25555, msg);
 					queue.clear();
-					has_token = false;
 
 				}
 			} else if (!has_token && !req_sent) {
@@ -283,6 +283,9 @@ class raymond_tree {
 				send_msg(my_nebr_hostnames.get(holder), 25555, msg);
 				req_sent = true;
 			}
+			System.out.print("QUEUE : " + queue);
+			System.out.println("");
+
 		}
 
 		// On receiving token
@@ -290,20 +293,20 @@ class raymond_tree {
 
 			has_token = true;
 			String[] list = message.split(" ");
-			System.out.print("QUEUE : " + queue);
-			System.out.println("");
 
 			if (!queue.isEmpty()) {
 				if (req_sent && queue.get(0).equalsIgnoreCase(id)) {
 					req_sent = false;
 					queue.remove(0);
 					SimpleDateFormat format = new SimpleDateFormat("HH.mm.ss");
-					Date date1 = (Date) format.parse("" + sdf.format(request_time));
+					Date date1 = (Date) format.parse(""
+							+ sdf.format(request_time));
 					Date date2 = (Date) format.parse(list[1]);
 					Date date3 = (Date) format.parse(""
-							+ sdf.format(new Timestamp(System.currentTimeMillis())));
+							+ sdf.format(new Timestamp(System
+									.currentTimeMillis())));
 
-					long difference = date2.getTime() - date1.getTime();
+					float difference = date2.getTime() - date1.getTime();
 					wait_time = date3.getTime() - date1.getTime();
 					delay = date3.getTime() - date2.getTime();
 					start_cs();
@@ -312,8 +315,18 @@ class raymond_tree {
 					holder = queue.get(0);
 					queue.remove(0);
 					send_msg(my_nebr_hostnames.get(holder), 25555, message);
+					if (!queue.isEmpty()) {
+						String msg = "";
+						request_time = new Timestamp(System.currentTimeMillis());
+						msg = "Request " + id;
+						msg_count++;
+						send_msg(my_nebr_hostnames.get(holder), 25555, msg);
+						req_sent = true;
+					}
 				}
 			}
+			System.out.print("QUEUE : " + queue);
+			System.out.println("");
 
 		}
 
@@ -321,12 +334,10 @@ class raymond_tree {
 		else if (message.split(" ")[0].equalsIgnoreCase("data")) {
 			String[] list = message.split(" ");
 
-			avg_msg_count = (avg_msg_count * cs_counter + Integer
-					.valueOf(list[1])) / (cs_counter + 1);
-			avg_delay = (avg_delay * cs_counter + Long.parseLong(list[2]))
+			avg_msg_count = (avg_msg_count * cs_counter + Math.abs(Float.parseFloat(list[1]))) / (cs_counter + 1);
+			avg_delay = (avg_delay * cs_counter + Math.abs(Float.parseFloat(list[2])))
 					/ (cs_counter + 1);
-			avg_wait_time = (avg_wait_time * cs_counter + Long
-					.parseLong(list[2])) / (cs_counter + 1);
+			avg_wait_time = (avg_wait_time * cs_counter + Math.abs(Float.parseFloat(list[2]))) / (cs_counter + 1);
 			cs_counter++;
 		}
 
@@ -419,6 +430,7 @@ class raymond_tree {
 						id = msg_list[1];
 						holder = msg_list[2];
 						System.out.println("Id received : " + id);
+						System.out.println("Parent received : " + holder);
 					}
 				}
 
@@ -604,41 +616,45 @@ class raymond_tree {
 			// Randomly sleep the thread for upto 5ms.
 			int randomNum = ThreadLocalRandom.current().nextInt(t1, t2 + 1);
 			Thread.sleep(randomNum);
-			
+			queue.add(id);
 
 			// After waking up request critical section if it doesnt have token
-			if (!has_token && !req_sent) {
-				String msg = "";
-				request_time = new Timestamp(System.currentTimeMillis());
-				msg = "Request " + id;
-				msg_count++;
-				send_msg(my_nebr_hostnames.get(holder), 25555, msg);
-				req_sent = true;
-				queue.add(id);
+			if (!has_token) {
+				if (!req_sent) {
+					String msg = "";
+					request_time = new Timestamp(System.currentTimeMillis());
+					msg = "Request " + id;
+					msg_count++;
+					send_msg(my_nebr_hostnames.get(holder), 25555, msg);
+					System.out.print("SENT : " + msg + " to " + holder);
+					req_sent = true;
+				}
+			}
 
-			} else if(has_token){
-				queue.add(id);
-				if (!queue.isEmpty() ) {
+			else if (has_token) {
+				if (!queue.isEmpty()) {
 					if (queue.get(0).equalsIgnoreCase(id)) {
 						queue.remove(0);
 						start_cs();
 					}
-				}else {
-					holder = queue.get(0);
-					queue.remove(0);
-					Timestamp time = new Timestamp(System.currentTimeMillis());
-					String msg = "Token " + sdf.format(time);
-					System.out.print("SENT : " + msg);
-					send_msg(my_nebr_hostnames.get(holder), 25555, msg);
-					has_token = false;
-					System.out.println("");
-					String re_msg = "";
-					request_time = new Timestamp(System.currentTimeMillis());
-					re_msg = "Request " + id;
-					msg_count++;
-					send_msg(my_nebr_hostnames.get(holder), 25555, re_msg);
-					req_sent = true;
-				}
+					else {
+						holder = queue.get(0);
+						queue.remove(0);
+						has_token = false;
+						Timestamp time = new Timestamp(System.currentTimeMillis());
+						String msg = "Token " + sdf.format(time);
+						System.out.print("SENT : " + msg);
+						send_msg(my_nebr_hostnames.get(holder), 25555, msg);
+						System.out.println("");
+						String re_msg = "";
+						request_time = new Timestamp(System.currentTimeMillis());
+						re_msg = "Request " + id;
+						msg_count++;
+						send_msg(my_nebr_hostnames.get(holder), 25555, re_msg);
+						System.out.print("SENT : " + re_msg + " to " + holder);
+						req_sent = true;
+					}
+				} 
 			}
 
 		} catch (InterruptedException e) {
@@ -677,9 +693,6 @@ class raymond_tree {
 		delay = 0;
 		wait_time = 0;
 
-		// After waking up, check queue and send token.
-		in_cs = false;
-
 		// If queue is not empty. Send the token.
 		if (!queue.isEmpty()) {
 			// Change the parent node.
@@ -687,12 +700,16 @@ class raymond_tree {
 
 			queue.remove(0);
 			Timestamp time = new Timestamp(System.currentTimeMillis());
-			String msg = "Token " + sdf.format(time);
-			System.out.print("SENT : " + msg);
-			send_msg(my_nebr_hostnames.get(holder), 25555, msg);
 			has_token = false;
+			String msg = "Token " + sdf.format(time);
+			System.out.print("SENT : " + msg + " to " + holder);
+			send_msg(my_nebr_hostnames.get(holder), 25555, msg);
 			System.out.println("");
 		}
+		System.out.print("QUEUE : " + queue);
+		System.out.println("");
+
+		in_cs = false;
 
 		run_count--;
 		System.out.println("RUN COUNT LEFT : " + run_count);
