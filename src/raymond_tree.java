@@ -75,8 +75,8 @@ class raymond_tree {
 		}
 
 		Random r = new Random();
-		int Low = 2;
-		int High = 5;
+		int Low = 5;
+		int High = 15;
 		run_count = r.nextInt(High - Low) + Low;
 
 		// Read the dsConfig File and assign the data to proper variables.
@@ -705,6 +705,16 @@ class raymond_tree {
 			System.out.print("SENT : " + msg + " to " + holder);
 			send_msg(my_nebr_hostnames.get(holder), 25555, msg);
 			System.out.println("");
+			
+			if(!queue.isEmpty()){
+				String re_msg = "";
+				request_time = new Timestamp(System.currentTimeMillis());
+				re_msg = "Request " + id;
+				msg_count++;
+				send_msg(my_nebr_hostnames.get(holder), 25555, re_msg);
+				System.out.print("SENT : " + re_msg + " to " + holder);
+				req_sent = true;
+			}
 		}
 		System.out.print("QUEUE : " + queue);
 		System.out.println("");
