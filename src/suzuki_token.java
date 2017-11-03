@@ -351,6 +351,7 @@ class suzuki {
 				System.out.println("AVG MSG COUNT : " + avg_msg_count);
 				System.out.println("AVG DELAY : " + avg_delay);
 				System.out.println("AVG WAIT TIME : " + avg_wait_time);
+				System.out.println("Token : " + has_token);
 				System.exit(0);
 			}
 
@@ -363,6 +364,7 @@ class suzuki {
 
 		// On receiving terminate.
 		else if (message.equalsIgnoreCase("terminate")) {
+			System.out.println("Token : " + has_token);
 			System.exit(0);
 		}
 	}
@@ -736,6 +738,7 @@ class suzuki {
 					System.out.println("AVG MSG COUNT" + avg_msg_count);
 					System.out.println("AVG DELAY" + avg_delay);
 					System.out.println("AVG WAIT TIME" + avg_wait_time);
+					System.out.println("Token : " + has_token);
 					System.exit(0);
 				}
 			}
