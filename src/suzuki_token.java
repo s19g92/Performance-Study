@@ -21,7 +21,7 @@ import java.util.Scanner;
 import java.util.concurrent.ThreadLocalRandom;
 
 @SuppressWarnings({ "rawtypes", "unused" })
-class suzuki {
+class suzuki_token {
 
 	// Common Variables and Data Storage.
 	static String coordinator = "";
